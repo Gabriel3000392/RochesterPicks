@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum MarketType {
+  YES_NO
+  MULTIPLE_CHOICE
+}
+
+enum MarketStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+  CANCELLED
+}
+
+enum PredictionStatus {
+  ACTIVE
+  WON
+  LOST
+  REFUNDED
+}
+
+enum BalanceTransactionType {
+  ADMIN_ADJUSTMENT
+  STAKE
+  PAYOUT
+  REFUND
+}
+
+model User {
+  id                    String               @id @default(cuid())
+  email                 String               @unique
+  passwordHash          String
+  name                  String
+  role                  Role                 @default(USER)
+  isActive              Boolean              @default(true)
+  balance               Int                  @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  inviteCodesCreated    InviteCode[]         @relation("InviteCreatedBy")
+  marketsCreated        Market[]             @relation("MarketCreatedBy")
+  predictions           Prediction[]
+  balanceTransactions   BalanceTransaction[]
+
+  @@index([isActive])
+}
+
+model InviteCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  maxUses     Int
+  currentUses Int      @default(0)
+  createdById String
+  createdBy   User     @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  expiresAt   DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([createdById])
+  @@index([cancelledAt])
+}
+
+model Market {
+  id                String               @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  type              MarketType
+  status            MarketStatus         @default(OPEN)
+  closeTime         DateTime
+  winningOutcomeId  String?
+  winningOutcome    Outcome?             @relation("WinningOutcome", fields: [winningOutcomeId], references: [id], onDelete: Restrict)
+  createdById       String
+  createdBy         User                 @relation("MarketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  resolvedAt        DateTime?
+  cancelledAt       DateTime?
+  outcomes          Outcome[]            @relation("MarketOutcomes")
+  predictions       Prediction[]
+  transactions      BalanceTransaction[]
+  oddsSnapshots     OddsSnapshot[]
+
+  @@index([status, closeTime])
+  @@index([createdById])
+  @@index([winningOutcomeId])
+}
+
+model Outcome {
+  id             String       @id @default(cuid())
+  marketId       String
+  market         Market       @relation("MarketOutcomes", fields: [marketId], references: [id], onDelete: Cascade)
+  label          String
+  createdAt      DateTime     @default(now())
+  predictions    Prediction[]
+  winningMarkets Market[]     @relation("WinningOutcome")
+  oddsSnapshots  OddsSnapshot[]
+
+  @@unique([marketId, label])
+  @@index([marketId])
+}
+
+model OddsSnapshot {
+  id                 String   @id @default(cuid())
+  marketId           String
+  market             Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  outcomeId          String
+  outcome            Outcome  @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  totalPool          Int
+  outcomePool        Int
+  impliedProbability Float
+  decimalOdds        Float
+  createdAt          DateTime @default(now())
+
+  @@index([marketId, createdAt])
+  @@index([outcomeId, createdAt])
+}
+
+model Prediction {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  marketId     String
+  market       Market             @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  outcomeId    String
+  outcome      Outcome            @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  amount       Int
+  status       PredictionStatus   @default(ACTIVE)
+  createdAt    DateTime           @default(now())
+  transactions BalanceTransaction[]
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([outcomeId])
+  @@index([status])
+}
+
+model BalanceTransaction {
+  id           String                 @id @default(cuid())
+  userId       String
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  amount       Int
+  type         BalanceTransactionType
+  marketId     String?
+  market       Market?                @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  predictionId String?
+  prediction   Prediction?            @relation(fields: [predictionId], references: [id], onDelete: Restrict)
+  createdAt    DateTime               @default(now())
+
+  @@unique([predictionId, type])
+  @@index([userId])
+  @@index([marketId])
+  @@index([type])
+}
