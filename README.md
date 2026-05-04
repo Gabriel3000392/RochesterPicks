@@ -2,36 +2,133 @@
 
 Rochester Picks is a self-hosted, invite-only sports prediction market app for friends using credits and leaderboard points.
 
-This project has no real-money functionality. It does not support deposits, withdrawals, cash value, crypto, prizes, payment processing, bookmaker margins, house profit, or external gambling integrations.
+This app is for private play only. It has no real-money functionality and does not support deposits, withdrawals, cash value, crypto, prizes, payment processing, bookmaker margins, house profit, or external gambling integrations.
 
-## Configure
+## Features
 
-Copy `.env.example` to `.env` and change the values:
+- Invite-only registration with cancellable invite codes
+- Admin-created players with editable names and balances
+- User/admin roles with server-side admin protection
+- Sports prediction markets with Yes/No or multiple-choice outcomes
+- Credit staking with parimutuel-style display odds
+- Odds history graphs on market pages
+- Market close, resolve, cancel/refund, and permanent delete tools
+- Mobile-friendly market pages and leaderboard
+- PostgreSQL + Prisma with Docker Compose
 
-```bash
+## Environment
+
+Create a `.env` file:
+
+```env
 DATABASE_URL="postgresql://postgres:postgres@db:5432/fake_markets?schema=public"
 AUTH_SECRET="replace-this-with-at-least-32-random-characters"
-APP_URL="http://localhost:3000"
+APP_URL="https://your-domain.duckdns.org"
 DEFAULT_ADMIN_EMAIL="admin@example.test"
 DEFAULT_ADMIN_NAME="Rochester Admin"
 DEFAULT_ADMIN_PASSWORD="ChangeMeFake123!"
 ```
 
-Change the default admin password immediately after first login.
+Generate a strong secret:
 
-## Run With Docker
+```bash
+openssl rand -base64 32
+```
+
+Change the default admin password after first login.
+
+## Run From Docker Hub
+
+Use this style on your server after pushing the image to Docker Hub:
+
+```yaml
+services:
+  app:
+    image: gabriel3003456345/rochester-picks:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      APP_URL: ${APP_URL}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fake_markets
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fake_markets"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+```
+
+Start or update:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+## HTTPS With DuckDNS And Nginx Proxy Manager
+
+1. Create a DuckDNS name, for example `rochesterpicks.duckdns.org`.
+2. Forward router ports `80` and `443` to Nginx Proxy Manager.
+3. Add a proxy host:
+   - Domain: `rochesterpicks.duckdns.org`
+   - Scheme: `http`
+   - Forward host/IP: your app server IP
+   - Forward port: `3000`
+   - Enable Websockets Support and Block Common Exploits
+4. Request a Let's Encrypt certificate in the SSL tab.
+5. Set:
+
+```env
+APP_URL="https://rochesterpicks.duckdns.org"
+```
+
+Then restart:
 
 ```bash
 docker compose up -d
 ```
 
-The app listens at [http://localhost:3000](http://localhost:3000). The app container runs Prisma migrations and the seed script on startup.
+Use the HTTPS URL. Production cookies are secure, so plain HTTP can cause button clicks to send you back to login.
 
-Default admin login:
+## Admin Workflows
 
-- Email: `admin@example.test`, unless changed in `.env`
-- Name: `Rochester Admin`, unless changed in `.env`
-- Password: `ChangeMeFake123!`, unless changed in `.env`
+- Add players from `/admin`; new players start with `0` credits.
+- Edit player names from `/admin`.
+- Adjust player credits with positive or negative integers.
+- Create, cancel, or reactivate invite access through invite codes.
+- Create, edit, close, resolve, cancel/refund, or permanently delete markets.
+- Permanent market delete removes that market's predictions, odds history, and related activity records. Active stakes are refunded first.
+
+## Odds
+
+Odds are credit parimutuel display odds only:
+
+- `totalPool = total credits staked on all outcomes`
+- `outcomePool = total credits staked on one outcome`
+- `impliedProbability = outcomePool / totalPool`
+- `decimalOdds = totalPool / outcomePool`
+
+When the total pool is zero, the app shows equal probabilities across outcomes. No margin or house edge is added.
 
 ## Local Development
 
@@ -45,59 +142,34 @@ npm run dev
 
 For local development outside Docker, set `DATABASE_URL` to a reachable PostgreSQL database.
 
-## Common Workflows
-
-- Create users: login as admin, create invite codes from `/admin`, then share a code with a friend. Registration is blocked without a valid, unexpired code with remaining uses.
-- Cancel invite codes: login as admin and use **Cancel** next to an active invite code. Cancelled codes cannot create accounts.
-- Add or remove players: login as admin and use **Add player** or **Remove** in `/admin`. Removing a player deactivates their account so prediction history stays intact.
-- Create a market: go to `/admin`, choose **New market**, enter the title, sport/category, close time, and outcomes.
-- Add credits: in `/admin`, enter a positive or negative integer next to a user. Admin adjustments are shown separately from prediction profit/loss.
-- Place predictions: users open `/markets`, pick a market, choose an outcome, and stake credits. Stakes are deducted immediately.
-- Resolve a market: in `/admin`, select the winning outcome and resolve. Winners split the credit pool proportionally.
-- Cancel a market: in `/admin`, choose **Cancel and refund**. Active stakes are returned exactly once.
-
-## Odds
-
-Odds are credit parimutuel display odds only:
-
-- `totalPool = total credits staked on all outcomes`
-- `outcomePool = total credits staked on one outcome`
-- `impliedProbability = outcomePool / totalPool`
-- `decimalOdds = totalPool / outcomePool`
-
-When the total pool is zero, the app shows equal probabilities across all outcomes and avoids division by zero. No margin or house edge is added.
-
 ## Testing
-
-Automated math tests:
 
 ```bash
 npm test
+npm run lint
 ```
 
-Manual checklist:
+Manual checks:
 
 - Register with a valid invite code.
-- Block registration with an invalid invite code.
-- Block expired or fully used invite codes.
+- Block invalid, expired, cancelled, or fully used invite codes.
 - Login as admin and create a market.
 - Add credits to a user.
 - Place a valid prediction.
-- Block staking more credits than the user has.
-- Block zero or negative stakes.
+- Block over-staking and zero/negative stakes.
 - Block predictions after close time.
-- Confirm odds update from credit pools.
+- Confirm odds and odds history update after predictions.
 - Resolve a market and confirm balances/leaderboard update.
-- Retry resolution and confirm users are not paid twice.
-- Cancel a market and confirm active stakes are refunded.
-- Retry cancellation and confirm users are not refunded twice.
-- Confirm normal users cannot access `/admin` pages.
+- Confirm double resolution does not pay twice.
+- Cancel a market and confirm active stakes are refunded once.
+- Confirm normal users cannot access admin pages.
 
-## Production Notes
+## Backups
 
-- Use a strong `AUTH_SECRET`.
-- Change the seeded admin password.
-- Keep PostgreSQL data on the persistent Docker volume.
-- Put the app behind HTTPS in production so secure cookies are protected.
-- Keep all wording and workflows credits-only with no real-money functionality.
-"# RochesterPicks" 
+Back up PostgreSQL:
+
+```bash
+docker compose exec db pg_dump -U postgres fake_markets > rochester-picks-backup.sql
+```
+
+Keep the `postgres_data` Docker volume safe. It contains your app data.

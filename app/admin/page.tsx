@@ -8,7 +8,9 @@ import {
   closeMarketAction,
   createInviteCodeAction,
   createPlayerAction,
+  deleteMarketAction,
   deactivatePlayerAction,
+  editPlayerNameAction,
   reactivatePlayerAction,
   resolveMarketAction
 } from "@/app/actions";
@@ -157,6 +159,13 @@ export default async function AdminPage({
                   </div>
                   <div className="font-bold text-emerald-300">{user.balance} pts</div>
                 </div>
+                <form action={editPlayerNameAction} className="mt-3 flex gap-2">
+                  <input type="hidden" name="userId" value={user.id} />
+                  <input className="input" name="name" defaultValue={user.name} required />
+                  <button className="btn btn-secondary" type="submit">
+                    Save name
+                  </button>
+                </form>
                 <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                   <form action={adjustBalanceAction} className="flex gap-2">
                     <input type="hidden" name="userId" value={user.id} />
@@ -267,6 +276,19 @@ export default async function AdminPage({
                     </form>
                   </div>
                 ) : null}
+                <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/5 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-red-200">
+                      Delete forever removes this market, its predictions, odds history, and related activity. Active stakes are refunded first.
+                    </p>
+                    <form action={deleteMarketAction}>
+                      <input type="hidden" name="marketId" value={market.id} />
+                      <button className="btn btn-danger w-full whitespace-nowrap" type="submit">
+                        Delete forever
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
             );
           })}

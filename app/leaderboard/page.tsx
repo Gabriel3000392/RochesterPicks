@@ -43,7 +43,39 @@ export default async function LeaderboardPage() {
         <p className="mt-1 text-sm text-slate-400">Prediction profit/loss is separated from admin balance changes.</p>
       </div>
 
-      <div className="panel overflow-hidden">
+      <div className="space-y-3 lg:hidden">
+        {rows.map((row, index) => (
+          <div key={row.id} className="panel p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-300">
+                  {index < 3 ? <Medal className="h-4 w-4" aria-hidden /> : null}
+                  #{index + 1}
+                </div>
+                <h2 className="mt-1 truncate text-xl font-bold text-white">{row.name}</h2>
+              </div>
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-right">
+                <div className="text-xs uppercase tracking-wide text-emerald-200">Balance</div>
+                <div className="text-lg font-bold text-white">{row.balance} pts</div>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <MobileMetric label="Predictions" value={row.totalPredictions} />
+              <MobileMetric label="Wins" value={row.wins} />
+              <MobileMetric label="Losses" value={row.losses} />
+              <MobileMetric label="Admin" value={signed(row.adminAdjustments)} />
+            </div>
+            <div className="mt-2 rounded-md bg-slate-950 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Prediction P/L</div>
+              <div className={row.predictionProfitLoss >= 0 ? "text-lg font-bold text-emerald-300" : "text-lg font-bold text-red-300"}>
+                {signed(row.predictionProfitLoss)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel hidden overflow-hidden lg:block">
         <div className="hidden grid-cols-[4rem_1fr_repeat(6,minmax(6rem,8rem))] gap-3 border-b border-slate-800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid">
           <div>Rank</div>
           <div>User</div>
@@ -75,6 +107,15 @@ export default async function LeaderboardPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function MobileMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md bg-slate-950 p-3">
+      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 font-semibold text-slate-100">{value}</div>
     </div>
   );
 }

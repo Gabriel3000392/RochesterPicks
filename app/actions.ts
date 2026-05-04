@@ -9,6 +9,7 @@ import { buildOddsSnapshotRows, calculateOutcomePools } from "@/lib/odds";
 import {
   adminCreateUserSchema,
   balanceAdjustmentSchema,
+  editUserNameSchema,
   inviteIdSchema,
   inviteCodeSchema,
   loginSchema,
@@ -213,6 +214,24 @@ export async function reactivatePlayerAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/leaderboard");
   actionSuccess("/admin", "player-reactivated");
+}
+
+export async function editPlayerNameAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = editUserNameSchema.safeParse({
+    userId: formValue(formData, "userId"),
+    name: formValue(formData, "name")
+  });
+  if (!parsed.success) actionError("/admin", parsed.error.issues[0]?.message ?? "Invalid player name.");
+
+  await prisma.user.update({
+    where: { id: parsed.data.userId },
+    data: { name: parsed.data.name }
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/leaderboard");
+  actionSuccess("/admin", "player-renamed");
 }
 
 function normalizedMarketData(formData: FormData) {
@@ -574,4 +593,51 @@ export async function cancelMarketAction(formData: FormData) {
   revalidatePath("/leaderboard");
   revalidatePath("/admin");
   actionSuccess("/admin", "market-cancelled");
+}
+
+export async function deleteMarketAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = marketIdSchema.safeParse({ marketId: formValue(formData, "marketId") });
+  if (!parsed.success) actionError("/admin", "Invalid market.");
+
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const market = await tx.market.findUnique({
+          where: { id: parsed.data.marketId },
+          include: { predictions: true }
+        });
+        if (!market) throw new Error("Market not found.");
+
+        // Permanent deletion removes prediction history for this market. Any
+        // still-active stakes are refunded first so balances are not left short.
+        const activePredictions = market.predictions.filter((prediction) => prediction.status === PredictionStatus.ACTIVE);
+        for (const prediction of activePredictions) {
+          await tx.user.update({
+            where: { id: prediction.userId },
+            data: { balance: { increment: prediction.amount } }
+          });
+        }
+
+        const predictionIds = market.predictions.map((prediction) => prediction.id);
+        await tx.balanceTransaction.deleteMany({
+          where: predictionIds.length
+            ? { OR: [{ marketId: market.id }, { predictionId: { in: predictionIds } }] }
+            : { marketId: market.id }
+        });
+        await tx.prediction.deleteMany({ where: { marketId: market.id } });
+        await tx.oddsSnapshot.deleteMany({ where: { marketId: market.id } });
+        await tx.market.delete({ where: { id: market.id } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  } catch (error) {
+    if (error instanceof Error) actionError("/admin", error.message);
+    actionError("/admin", "Market deletion failed.");
+  }
+
+  revalidatePath("/markets");
+  revalidatePath("/leaderboard");
+  revalidatePath("/admin");
+  actionSuccess("/admin", "market-deleted");
 }

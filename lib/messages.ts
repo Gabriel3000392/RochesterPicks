@@ -18,9 +18,11 @@ export const messages: Record<string, string> = {
   "market-updated": "Market updated.",
   "market-manually-closed": "Market closed.",
   "player-created": "Player created.",
+  "player-renamed": "Player name updated.",
   "player-deactivated": "Player removed from active players.",
   "player-reactivated": "Player reactivated.",
-  "account-inactive": "This account is inactive. Ask an admin to reactivate it."
+  "account-inactive": "This account is inactive. Ask an admin to reactivate it.",
+  "market-deleted": "Market permanently deleted."
 };
 
 export function getMessage(code?: string | string[] | null) {

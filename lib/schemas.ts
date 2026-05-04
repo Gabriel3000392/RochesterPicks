@@ -30,6 +30,11 @@ export const userIdSchema = z.object({
   userId: z.string().min(1)
 });
 
+export const editUserNameSchema = z.object({
+  userId: z.string().min(1),
+  name: z.string().trim().min(2).max(80)
+});
+
 export const inviteCodeSchema = z.object({
   code: z.string().trim().min(3).max(80),
   maxUses: z.coerce.number().int().min(1).max(1000),
